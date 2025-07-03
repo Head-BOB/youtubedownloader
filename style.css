@@ -18,7 +18,7 @@ body {
 }
 .container {
     width: 100%;
-    max-width: 800px; /* Wider container for desktops */
+    max-width: 800px;
     background-color: var(--card-color);
     border-radius: 12px;
     padding: 30px;
