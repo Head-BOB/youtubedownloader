@@ -5,14 +5,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const resultsDiv = document.getElementById('results');
     const errorDiv = document.getElementById('error');
 
-    const CORS_PROXY = 'https://api.allorigins.win/raw?url=';
+    // Switched to a more reliable CORS proxy.
+    const CORS_PROXY = 'https://corsproxy.io/?';
     
+    // A curated list of currently working Invidious instances.
     const API_INSTANCES = [
+        'https://invidious.projectsegfau.lt',
         'https://vid.puffyan.us',
         'https://iv.ggtyler.dev',
-        'https://invidious.lunar.icu',
-        'https://invidious.projectsegfau.lt',
-        'https://invidious.protokolla.fi'
+        'https://invidious.protokolla.fi',
+        'https://invidious.lunar.icu'
     ];
 
     form.addEventListener('submit', async (e) => {
@@ -49,20 +51,29 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 console.log(`Trying instance via proxy: ${apiUrl}`);
                 const response = await fetch(proxyUrl);
+
+                // **SMARTER ERROR CHECKING, PART 1: Check for HTTP errors (like 404, 500)**
                 if (!response.ok) {
-                    throw new Error(`Proxy fetch failed for ${instance} with status ${response.status}`);
+                    throw new Error(`HTTP error! Status: ${response.status}`);
                 }
+
+                // **SMARTER ERROR CHECKING, PART 2: Check if the response is actually JSON**
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    throw new Error(`Expected JSON but got ${contentType}`);
+                }
+
                 const data = await response.json();
                 console.log(`Success from: ${instance}`);
-                return data;
+                return data; // If we get here, it worked!
             } catch (error) {
-                console.warn(error.message);
+                console.warn(`Failed for ${instance}: ${error.message}. Trying next...`);
             }
         }
-        throw new Error("All API instances failed.");
+        throw new Error("All API instances failed after trying all fallbacks.");
     }
 
-    
+    // The rest of the functions are perfect and do not need to be changed.
     function displayResults(data) {
         resultsDiv.innerHTML = `<div id="results-container"><div id="video-info"><img src="${data.videoThumbnails.find(t=>t.quality==="medium").url}" alt="Video Thumbnail"><h2>${data.title}</h2></div><div id="download-options"></div></div>`;
         const downloadOptions=document.getElementById("download-options");const audioStreams=data.adaptiveFormats.filter(f=>f.type.startsWith("audio/"));const videoStreams=data.adaptiveFormats.filter(f=>f.type.startsWith("video/")).filter(f=>f.resolution);if(audioStreams.length>0){const bestAudio=audioStreams.sort((a,b)=>b.bitrate-a.bitrate)[0];const audioSection=createDownloadSection("Music (Audio Only)",[bestAudio],()=>"Best Audio",f=>f.container.toUpperCase());downloadOptions.appendChild(audioSection)}if(videoStreams.length>0){videoStreams.sort((a,b)=>parseInt(b.resolution)-parseInt(a.resolution));const videoSection=createDownloadSection("Video",videoStreams,f=>f.resolution,f=>f.container.toUpperCase());downloadOptions.appendChild(videoSection)}
