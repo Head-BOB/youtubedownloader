@@ -5,7 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const resultsDiv = document.getElementById('results');
     const errorDiv = document.getElementById('error');
     
-    
+    // Correct API endpoint
     const API_ENDPOINT = 'https://co.wuk.sh/api/json';
 
     form.addEventListener('submit', async (e) => {
@@ -40,7 +40,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
 
             if (data.status !== 'success') {
-                // Handle specific API errors if they exist
                 throw new Error(data.text || "The API returned an error. The video may be region-locked or private.");
             }
             
@@ -55,7 +54,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function displayResults(data) {
-        // Create the two-column layout
         resultsDiv.innerHTML = `
             <div id="results-container">
                 <div id="video-info">
@@ -68,13 +66,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const downloadOptions = document.getElementById('download-options');
 
-        // Audio Section
         if (data.audio) {
             const audioSection = createDownloadSection('Music (Audio Only)', [data.audio], (format) => `${format.quality} (${format.ext.toUpperCase()})`, (format) => `${format.size || ''}`);
             downloadOptions.appendChild(audioSection);
         }
 
-        // Video Section
         if (data.videos && data.videos.length > 0) {
             const videoSection = createDownloadSection('Video', data.videos, (format) => `${format.quality} (${format.ext.toUpperCase()})`, (format) => `${format.size || ''}`);
             downloadOptions.appendChild(videoSection);
@@ -111,7 +107,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function isValidYoutubeUrl(url) {
-        // A more lenient regex to accept various YouTube URL formats
         const youtubeRegex = /^(https?:\/\/)?(www\.)?(m\.)?(youtube\.com|youtu\.be)\/.+/;
         return youtubeRegex.test(url);
     }
