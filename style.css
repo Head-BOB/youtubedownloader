@@ -1,4 +1,3 @@
-//test
 :root {
     --bg-color: #0f0f0f;
     --card-color: #212121;
@@ -15,15 +14,17 @@ body {
     display: flex;
     justify-content: center;
     padding: 20px;
+    min-height: 100vh;
 }
 .container {
     width: 100%;
-    max-width: 800px; 
+    max-width: 800px; /* Wider container for desktops */
     background-color: var(--card-color);
     border-radius: 12px;
     padding: 30px;
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
     border: 1px solid var(--border-color);
+    margin: auto 0;
 }
 header h1 { text-align: center; margin-bottom: 10px; font-size: 2em; }
 header p { text-align: center; color: var(--subtle-text); margin-bottom: 30px; }
@@ -60,18 +61,18 @@ header p { text-align: center; color: var(--subtle-text); margin-bottom: 30px; }
 }
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 .hidden { display: none; }
-
-
 #results-container {
     display: grid;
-    grid-template-columns: 2fr 3fr; 
+    grid-template-columns: 2fr 3fr;
     gap: 30px;
     align-items: flex-start;
+    margin-top: 20px;
 }
 #video-info img {
     width: 100%;
     border-radius: 8px;
     margin-bottom: 15px;
+    border: 1px solid var(--border-color);
 }
 #video-info h2 {
     font-size: 1.4em;
@@ -112,12 +113,10 @@ header p { text-align: center; color: var(--subtle-text); margin-bottom: 30px; }
     margin-top: 20px;
 }
 footer { text-align: center; margin-top: 30px; color: var(--subtle-text); font-size: 0.9em; }
-
-
 @media (max-width: 768px) {
     .container { padding: 20px; }
     #url-form { flex-direction: column; }
     #results-container {
-        grid-template-columns: 1fr; 
+        grid-template-columns: 1fr;
     }
 }
