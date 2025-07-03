@@ -4,16 +4,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const loader = document.getElementById('loader');
     const resultsDiv = document.getElementById('results');
     const errorDiv = document.getElementById('error');
+
+    const CORS_PROXY = 'https://api.allorigins.win/raw?url=';
     
-    // The previous API (co.wuk.sh) is down.
-    // This new system uses a list of public servers and tries them
-    // one-by-one until it finds one that works. This is much more reliable.
+
     const API_INSTANCES = [
         'https://vid.puffyan.us',
-        'https://inv.id.is',
-        'https://invidious.namazso.eu',
         'https://iv.ggtyler.dev',
-        'https://invidious.lunar.icu'
+        'https://invidious.lunar.icu',
+        'https://invidious.projectsegfau.lt',
+        'https://invidious.protokolla.fi'
     ];
 
     form.addEventListener('submit', async (e) => {
@@ -41,19 +41,24 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     async function fetchWithFallback(videoId) {
-        // Shuffle the array to distribute load and not always hit the first one
         const shuffledInstances = API_INSTANCES.sort(() => 0.5 - Math.random());
 
         for (const instance of shuffledInstances) {
+            
+            const apiUrl = `${instance}/api/v1/videos/${videoId}`;
+            const proxyUrl = `${CORS_PROXY}${encodeURIComponent(apiUrl)}`;
+            
             try {
-                const response = await fetch(`${instance}/api/v1/videos/${videoId}`);
+                console.log(`Trying instance via proxy: ${apiUrl}`);
+                const response = await fetch(proxyUrl);
                 if (!response.ok) {
-                    throw new Error(`Instance ${instance} failed`);
+                    throw new Error(`Proxy fetch failed for ${instance} with status ${response.status}`);
                 }
-                console.log(`Successfully fetched from: ${instance}`);
-                return await response.json(); // Success!
+                const data = await response.json();
+                console.log(`Success from: ${instance}`);
+                return data;
             } catch (error) {
-                console.warn(`Failed to fetch from ${instance}. Trying next...`);
+                console.warn(error.message);
             }
         }
         throw new Error("All API instances failed.");
