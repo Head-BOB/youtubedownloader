@@ -4,39 +4,31 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>YT Downloader</title>
-    <meta name="description" content="A reliable YouTube downloader that uses multiple services to ensure it's always working. Download video or music.">
+    <meta name="description" content="A reliable YouTube downloader that uses a public API for video and music downloads.">
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
-
     <div class="container">
         <header>
             <h1>YouTube Downloader</h1>
             <p>Paste a link to get your download buttons.</p>
         </header>
-
         <main>
             <form id="url-form">
                 <input type="text" id="video-url" placeholder="Paste YouTube link here..." required>
                 <button type="submit">Download</button>
             </form>
-
             <div id="loader" class="hidden"></div>
-            
-            <!-- Results will be injected here -->
             <div id="results"></div>
-
             <div id="error" class="hidden"></div>
         </main>
-
         <footer>
             <p>Powered by a public API. Multimedia downloading made easy.</p>
         </footer>
     </div>
-
     <script src="script.js"></script>
 </body>
 </html>
