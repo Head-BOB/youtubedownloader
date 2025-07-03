@@ -5,25 +5,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const resultsDiv = document.getElementById('results');
     const errorDiv = document.getElementById('error');
 
-    // Switched to a more reliable CORS proxy.
-    const CORS_PROXY = 'https://corsproxy.io/?';
-    
-    // A curated list of currently working Invidious instances.
-    const API_INSTANCES = [
-        'https://invidious.projectsegfau.lt',
-        'https://vid.puffyan.us',
-        'https://iv.ggtyler.dev',
-        'https://invidious.protokolla.fi',
-        'https://invidious.lunar.icu'
-    ];
+    // This is the final and most robust approach. We are switching to a
+    // professional-grade, stable public API designed for this purpose.
+    const API_ENDPOINT = 'https://api.cobalt.tools/api/json';
 
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const videoURL = videoUrlInput.value.trim();
-        const videoId = extractVideoId(videoURL);
 
-        if (!videoId) {
-            showError("Invalid YouTube URL. Please check the link and try again.");
+        if (!isValidYoutubeUrl(videoURL)) {
+            showError("Invalid YouTube URL. Please use a full video link.");
             return;
         }
 
@@ -31,55 +22,131 @@ document.addEventListener('DOMContentLoaded', () => {
         loader.classList.remove('hidden');
 
         try {
-            const data = await fetchWithFallback(videoId);
-            displayResults(data);
+            const response = await fetch(API_ENDPOINT, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    url: encodeURI(videoURL)
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`API returned an error: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+
+            // This API uses a "status" field to report success or errors.
+            switch (data.status) {
+                case 'success':
+                    displayResults(data);
+                    break;
+                case 'redirect':
+                    // If it's a simple redirect, just show one download button.
+                    displayRedirect(data);
+                    break;
+                case 'error':
+                    throw new Error(data.text || 'The API reported an error.');
+                    break;
+                case 'stream':
+                     // If it's a stream, we can use the stream URL directly.
+                    displayRedirect(data);
+                    break;
+                default:
+                    throw new Error('An unknown error occurred with the API.');
+            }
+
         } catch (err) {
             console.error(err);
-            showError("Could not fetch video details. All services may be down or the video is private. Please try again later.");
+            showError(err.message);
         } finally {
             loader.classList.add('hidden');
         }
     });
 
-    async function fetchWithFallback(videoId) {
-        const shuffledInstances = API_INSTANCES.sort(() => 0.5 - Math.random());
-
-        for (const instance of shuffledInstances) {
-            const apiUrl = `${instance}/api/v1/videos/${videoId}`;
-            const proxyUrl = `${CORS_PROXY}${encodeURIComponent(apiUrl)}`;
-            
-            try {
-                console.log(`Trying instance via proxy: ${apiUrl}`);
-                const response = await fetch(proxyUrl);
-
-                // **SMARTER ERROR CHECKING, PART 1: Check for HTTP errors (like 404, 500)**
-                if (!response.ok) {
-                    throw new Error(`HTTP error! Status: ${response.status}`);
-                }
-
-                // **SMARTER ERROR CHECKING, PART 2: Check if the response is actually JSON**
-                const contentType = response.headers.get('content-type');
-                if (!contentType || !contentType.includes('application/json')) {
-                    throw new Error(`Expected JSON but got ${contentType}`);
-                }
-
-                const data = await response.json();
-                console.log(`Success from: ${instance}`);
-                return data; // If we get here, it worked!
-            } catch (error) {
-                console.warn(`Failed for ${instance}: ${error.message}. Trying next...`);
-            }
-        }
-        throw new Error("All API instances failed after trying all fallbacks.");
-    }
-
-    // The rest of the functions are perfect and do not need to be changed.
+    // This function handles the new API response format.
     function displayResults(data) {
-        resultsDiv.innerHTML = `<div id="results-container"><div id="video-info"><img src="${data.videoThumbnails.find(t=>t.quality==="medium").url}" alt="Video Thumbnail"><h2>${data.title}</h2></div><div id="download-options"></div></div>`;
-        const downloadOptions=document.getElementById("download-options");const audioStreams=data.adaptiveFormats.filter(f=>f.type.startsWith("audio/"));const videoStreams=data.adaptiveFormats.filter(f=>f.type.startsWith("video/")).filter(f=>f.resolution);if(audioStreams.length>0){const bestAudio=audioStreams.sort((a,b)=>b.bitrate-a.bitrate)[0];const audioSection=createDownloadSection("Music (Audio Only)",[bestAudio],()=>"Best Audio",f=>f.container.toUpperCase());downloadOptions.appendChild(audioSection)}if(videoStreams.length>0){videoStreams.sort((a,b)=>parseInt(b.resolution)-parseInt(a.resolution));const videoSection=createDownloadSection("Video",videoStreams,f=>f.resolution,f=>f.container.toUpperCase());downloadOptions.appendChild(videoSection)}
+        // Since this API can return different types of responses,
+        // we handle both simple URLs and "pickers" with multiple options.
+        if (data.url) {
+             displayRedirect(data);
+             return;
+        }
+        
+        if (!data.picker) {
+             throw new Error("Could not find any download options.");
+        }
+
+        resultsDiv.innerHTML = `
+            <div id="results-container">
+                <div id="video-info">
+                    <img src="${data.thumb}" alt="Video Thumbnail">
+                    <h2>${data.title}</h2>
+                </div>
+                <div id="download-options">
+                    <h3>Available Downloads</h3>
+                    <div class="format-grid"></div>
+                </div>
+            </div>
+        `;
+
+        const grid = document.querySelector('.format-grid');
+
+        // This API returns a "picker" with different formats.
+        data.picker.forEach(format => {
+            const button = document.createElement('a');
+            button.href = format.url;
+            button.className = 'download-btn';
+            button.target = '_blank';
+            button.download = '';
+            
+            // Handle audio-only formats
+            let qualityLabel = format.quality || '';
+            if (format.type === 'audio') {
+                qualityLabel = 'Music Only';
+            } else {
+                 qualityLabel = format.quality ? `${format.quality}` : 'Video';
+                 if(format.audio) qualityLabel += ' 🔊';
+            }
+
+            button.innerHTML = `
+                <span class="quality">${qualityLabel}</span>
+                <span class="type">${format.type.toUpperCase()} - ${format.ext.toUpperCase()}</span>
+            `;
+            grid.appendChild(button);
+        });
     }
-    function createDownloadSection(title,formats,getQualityLabel,getTypeLabel){const sectionDiv=document.createElement("div");sectionDiv.className="download-section";const heading=document.createElement("h3");heading.textContent=title;sectionDiv.appendChild(heading);const grid=document.createElement("div");grid.className="format-grid";formats.forEach(format=>{const button=document.createElement("a");button.href=format.url;button.className="download-btn";button.target="_blank";button.download="";button.innerHTML=`<span class="quality">${getQualityLabel(format)}</span><span class="type">${getTypeLabel(format)}</span>`;grid.appendChild(button)});sectionDiv.appendChild(grid);return sectionDiv}
-    function extractVideoId(url){const regex=/(?:v=|\/|embed\/|youtu\.be\/)([a-zA-Z0-9_-]{11})/;const match=url.match(regex);return match?match[1]:null}
-    function showError(message){errorDiv.textContent=message;errorDiv.classList.remove("hidden")}
-    function clearUI(){resultsDiv.innerHTML="";errorDiv.classList.add("hidden")}
+
+    // A simpler display for when the API just gives one direct link.
+    function displayRedirect(data) {
+        resultsDiv.innerHTML = `
+            <div id="download-options">
+                <h3>Download Ready</h3>
+                <div class="format-grid">
+                    <a href="${data.url}" class="download-btn" target="_blank">
+                        <span class="quality">Click to Download</span>
+                        <span class="type">Your file is ready</span>
+                    </a>
+                </div>
+            </div>
+        `;
+    }
+
+    function isValidYoutubeUrl(url) {
+        const youtubeRegex = /^(https?:\/\/)?(www\.)?(m\.)?(youtube\.com|youtu\.be)\/.+/;
+        return youtubeRegex.test(url);
+    }
+
+    function showError(message) {
+        errorDiv.textContent = message;
+        errorDiv.classList.remove('hidden');
+    }
+
+    function clearUI() {
+        resultsDiv.innerHTML = '';
+        errorDiv.classList.add('hidden');
+    }
 });
