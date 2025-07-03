@@ -5,15 +5,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const resultsDiv = document.getElementById('results');
     const errorDiv = document.getElementById('error');
     
-    // Correct API endpoint
-    const API_ENDPOINT = 'https://co.wuk.sh/api/json';
+    // The previous API (co.wuk.sh) is down.
+    // This new system uses a list of public servers and tries them
+    // one-by-one until it finds one that works. This is much more reliable.
+    const API_INSTANCES = [
+        'https://vid.puffyan.us',
+        'https://inv.id.is',
+        'https://invidious.namazso.eu',
+        'https://iv.ggtyler.dev',
+        'https://invidious.lunar.icu'
+    ];
 
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const videoURL = videoUrlInput.value.trim();
+        const videoId = extractVideoId(videoURL);
 
-        if (!isValidYoutubeUrl(videoURL)) {
-            showError("Invalid YouTube URL. Please use a full video link (e.g., https://www.youtube.com/watch?v=...).");
+        if (!videoId) {
+            showError("Invalid YouTube URL. Please check the link and try again.");
             return;
         }
 
@@ -21,43 +30,40 @@ document.addEventListener('DOMContentLoaded', () => {
         loader.classList.remove('hidden');
 
         try {
-            const response = await fetch(API_ENDPOINT, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
-                body: JSON.stringify({
-                    url: videoURL,
-                    isAudioOnly: false // We want video and audio options
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`API Error: ${response.status} ${response.statusText}`);
-            }
-
-            const data = await response.json();
-
-            if (data.status !== 'success') {
-                throw new Error(data.text || "The API returned an error. The video may be region-locked or private.");
-            }
-            
+            const data = await fetchWithFallback(videoId);
             displayResults(data);
-
         } catch (err) {
             console.error(err);
-            showError(err.message);
+            showError("Could not fetch video details. All services may be down or the video is private. Please try again later.");
         } finally {
             loader.classList.add('hidden');
         }
     });
 
+    async function fetchWithFallback(videoId) {
+        // Shuffle the array to distribute load and not always hit the first one
+        const shuffledInstances = API_INSTANCES.sort(() => 0.5 - Math.random());
+
+        for (const instance of shuffledInstances) {
+            try {
+                const response = await fetch(`${instance}/api/v1/videos/${videoId}`);
+                if (!response.ok) {
+                    throw new Error(`Instance ${instance} failed`);
+                }
+                console.log(`Successfully fetched from: ${instance}`);
+                return await response.json(); // Success!
+            } catch (error) {
+                console.warn(`Failed to fetch from ${instance}. Trying next...`);
+            }
+        }
+        throw new Error("All API instances failed.");
+    }
+
     function displayResults(data) {
         resultsDiv.innerHTML = `
             <div id="results-container">
                 <div id="video-info">
-                    <img src="${data.thumb}" alt="Video Thumbnail">
+                    <img src="${data.videoThumbnails.find(t => t.quality === 'medium').url}" alt="Video Thumbnail">
                     <h2>${data.title}</h2>
                 </div>
                 <div id="download-options"></div>
@@ -65,50 +71,47 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
 
         const downloadOptions = document.getElementById('download-options');
+        const audioStreams = data.adaptiveFormats.filter(f => f.type.startsWith('audio/'));
+        const videoStreams = data.adaptiveFormats.filter(f => f.type.startsWith('video/')).filter(f => f.resolution);
 
-        if (data.audio) {
-            const audioSection = createDownloadSection('Music (Audio Only)', [data.audio], (format) => `${format.quality} (${format.ext.toUpperCase()})`, (format) => `${format.size || ''}`);
+        if (audioStreams.length > 0) {
+            const bestAudio = audioStreams.sort((a, b) => b.bitrate - a.bitrate)[0];
+            const audioSection = createDownloadSection('Music (Audio Only)', [bestAudio], () => 'Best Audio', (f) => f.container.toUpperCase());
             downloadOptions.appendChild(audioSection);
         }
 
-        if (data.videos && data.videos.length > 0) {
-            const videoSection = createDownloadSection('Video', data.videos, (format) => `${format.quality} (${format.ext.toUpperCase()})`, (format) => `${format.size || ''}`);
+        if (videoStreams.length > 0) {
+            videoStreams.sort((a, b) => parseInt(b.resolution) - parseInt(a.resolution));
+            const videoSection = createDownloadSection('Video', videoStreams, (f) => f.resolution, (f) => f.container.toUpperCase());
             downloadOptions.appendChild(videoSection);
         }
     }
 
-    function createDownloadSection(title, formats, getQualityLabel, getSizeLabel) {
+    function createDownloadSection(title, formats, getQualityLabel, getTypeLabel) {
         const sectionDiv = document.createElement('div');
         sectionDiv.className = 'download-section';
-        
         const heading = document.createElement('h3');
         heading.textContent = title;
         sectionDiv.appendChild(heading);
-
         const grid = document.createElement('div');
         grid.className = 'format-grid';
-        
         formats.forEach(format => {
             const button = document.createElement('a');
             button.href = format.url;
             button.className = 'download-btn';
             button.target = '_blank';
             button.download = '';
-            
-            button.innerHTML = `
-                <span class="quality">${getQualityLabel(format)}</span>
-                <span class="type">${getSizeLabel(format)}</span>
-            `;
+            button.innerHTML = `<span class="quality">${getQualityLabel(format)}</span><span class="type">${getTypeLabel(format)}</span>`;
             grid.appendChild(button);
         });
-
         sectionDiv.appendChild(grid);
         return sectionDiv;
     }
 
-    function isValidYoutubeUrl(url) {
-        const youtubeRegex = /^(https?:\/\/)?(www\.)?(m\.)?(youtube\.com|youtu\.be)\/.+/;
-        return youtubeRegex.test(url);
+    function extractVideoId(url) {
+        const regex = /(?:v=|\/|embed\/|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+        const match = url.match(regex);
+        return match ? match[1] : null;
     }
 
     function showError(message) {
