@@ -6,21 +6,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const errorDiv = document.getElementById('error');
     
     
-    const API_INSTANCES = [
-        'https://invidious.namazso.eu',
-        'https://iv.ggtyler.dev',
-        'https://vid.puffyan.us',
-        'https://inv.id.is',
-        'https://invidious.lunar.icu'
-    ];
+    const API_ENDPOINT = 'https://co.wuk.sh/api/json';
 
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const videoURL = videoUrlInput.value.trim();
 
-        const videoId = extractVideoId(videoURL);
-        if (!videoId) {
-            showError("Invalid YouTube URL. Please check the link and try again.");
+        if (!isValidYoutubeUrl(videoURL)) {
+            showError("Invalid YouTube URL. Please use a full video link (e.g., https://www.youtube.com/watch?v=...).");
             return;
         }
 
@@ -28,69 +21,67 @@ document.addEventListener('DOMContentLoaded', () => {
         loader.classList.remove('hidden');
 
         try {
+            const response = await fetch(API_ENDPOINT, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    url: videoURL,
+                    isAudioOnly: false // We want video and audio options
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`API Error: ${response.status} ${response.statusText}`);
+            }
+
+            const data = await response.json();
+
+            if (data.status !== 'success') {
+                // Handle specific API errors if they exist
+                throw new Error(data.text || "The API returned an error. The video may be region-locked or private.");
+            }
             
-            const data = await fetchWithFallback(videoId);
             displayResults(data);
+
         } catch (err) {
             console.error(err);
-            showError("Could not fetch video details. All services may be down or the video is private. Please try again later.");
+            showError(err.message);
         } finally {
             loader.classList.add('hidden');
         }
     });
 
-    async function fetchWithFallback(videoId) {
-        for (const instance of API_INSTANCES) {
-            try {
-                const response = await fetch(`${instance}/api/v1/videos/${videoId}`);
-                if (!response.ok) {
-                    throw new Error(`Instance ${instance} failed with status ${response.status}`);
-                }
-                console.log(`Successfully fetched from: ${instance}`);
-                return await response.json(); 
-            } catch (error) {
-                console.warn(`Failed to fetch from ${instance}. Trying next...`, error);
-            }
-        }
-       
-        throw new Error("All API instances failed to respond.");
-    }
-
     function displayResults(data) {
-        
+        // Create the two-column layout
         resultsDiv.innerHTML = `
             <div id="results-container">
                 <div id="video-info">
-                    <img src="${data.videoThumbnails.find(t => t.quality === 'medium').url}" alt="Video Thumbnail">
+                    <img src="${data.thumb}" alt="Video Thumbnail">
                     <h2>${data.title}</h2>
                 </div>
-                <div id="download-options">
-                    <!-- Download buttons will be added here -->
-                </div>
+                <div id="download-options"></div>
             </div>
         `;
 
         const downloadOptions = document.getElementById('download-options');
 
         // Audio Section
-        const audioStreams = data.adaptiveFormats.filter(f => f.type.startsWith('audio/'));
-        if (audioStreams.length > 0) {
-            const bestAudio = audioStreams.sort((a, b) => b.bitrate - a.bitrate)[0];
-            const audioSection = createDownloadSection('Music (Audio Only)', [bestAudio], (format) => 'Best Quality', (format) => 'M4A');
+        if (data.audio) {
+            const audioSection = createDownloadSection('Music (Audio Only)', [data.audio], (format) => `${format.quality} (${format.ext.toUpperCase()})`, (format) => `${format.size || ''}`);
             downloadOptions.appendChild(audioSection);
         }
 
         // Video Section
-        const videoStreams = data.adaptiveFormats
-            .filter(f => f.type.startsWith('video/') && f.resolution)
-            .sort((a, b) => parseInt(b.resolution) - parseInt(a.resolution));
-        if (videoStreams.length > 0) {
-            const videoSection = createDownloadSection('Video', videoStreams, (format) => format.resolution, (format) => format.container.toUpperCase());
+        if (data.videos && data.videos.length > 0) {
+            const videoSection = createDownloadSection('Video', data.videos, (format) => `${format.quality} (${format.ext.toUpperCase()})`, (format) => `${format.size || ''}`);
             downloadOptions.appendChild(videoSection);
         }
     }
 
-    function createDownloadSection(title, formats, getQualityLabel, getTypeLabel) {
+    function createDownloadSection(title, formats, getQualityLabel, getSizeLabel) {
         const sectionDiv = document.createElement('div');
         sectionDiv.className = 'download-section';
         
@@ -110,7 +101,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             button.innerHTML = `
                 <span class="quality">${getQualityLabel(format)}</span>
-                <span class="type">${getTypeLabel(format)}</span>
+                <span class="type">${getSizeLabel(format)}</span>
             `;
             grid.appendChild(button);
         });
@@ -119,10 +110,10 @@ document.addEventListener('DOMContentLoaded', () => {
         return sectionDiv;
     }
 
-    function extractVideoId(url) {
-        const regex = /(?:v=|\/|embed\/|youtu.be\/)([a-zA-Z0-9_-]{11})/;
-        const match = url.match(regex);
-        return match ? match[1] : null;
+    function isValidYoutubeUrl(url) {
+        // A more lenient regex to accept various YouTube URL formats
+        const youtubeRegex = /^(https?:\/\/)?(www\.)?(m\.)?(youtube\.com|youtu\.be)\/.+/;
+        return youtubeRegex.test(url);
     }
 
     function showError(message) {
