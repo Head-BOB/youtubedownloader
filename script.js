@@ -1,122 +1,137 @@
-:root {
-    --bg-color: #0f0f0f;
-    --card-color: #212121;
-    --primary-color: #ff0000;
-    --text-color: #f1f1f1;
-    --subtle-text: #aaa;
-    --border-color: #383838;
-}
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body {
-    font-family: 'Inter', sans-serif;
-    background-color: var(--bg-color);
-    color: var(--text-color);
-    display: flex;
-    justify-content: center;
-    padding: 20px;
-}
-.container {
-    width: 100%;
-    max-width: 800px; 
-    background-color: var(--card-color);
-    border-radius: 12px;
-    padding: 30px;
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
-    border: 1px solid var(--border-color);
-}
-header h1 { text-align: center; margin-bottom: 10px; font-size: 2em; }
-header p { text-align: center; color: var(--subtle-text); margin-bottom: 30px; }
-#url-form { display: flex; gap: 10px; margin-bottom: 30px; }
-#video-url {
-    flex-grow: 1;
-    padding: 14px;
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    background-color: var(--bg-color);
-    color: var(--text-color);
-    font-size: 16px;
-}
-#url-form button {
-    padding: 14px 24px;
-    background-color: var(--primary-color);
-    color: white;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    font-weight: 500;
-    font-size: 16px;
-    transition: background-color 0.2s ease;
-}
-#url-form button:hover { background-color: #c00; }
-#loader {
-    border: 5px solid #444;
-    border-top: 5px solid var(--primary-color);
-    border-radius: 50%;
-    width: 40px;
-    height: 40px;
-    animation: spin 1s linear infinite;
-    margin: 20px auto;
-}
-@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-.hidden { display: none; }
+document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('url-form');
+    const videoUrlInput = document.getElementById('video-url');
+    const loader = document.getElementById('loader');
+    const resultsDiv = document.getElementById('results');
+    const errorDiv = document.getElementById('error');
+    
+    
+    const API_INSTANCES = [
+        'https://invidious.namazso.eu',
+        'https://iv.ggtyler.dev',
+        'https://vid.puffyan.us',
+        'https://inv.id.is',
+        'https://invidious.lunar.icu'
+    ];
 
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const videoURL = videoUrlInput.value.trim();
 
-#results-container {
-    display: grid;
-    grid-template-columns: 2fr 3fr; 
-    gap: 30px;
-    align-items: flex-start;
-}
-#video-info img {
-    width: 100%;
-    border-radius: 8px;
-    margin-bottom: 15px;
-}
-#video-info h2 {
-    font-size: 1.4em;
-    line-height: 1.4;
-}
-.download-section h3 {
-    margin-bottom: 15px;
-    border-bottom: 1px solid var(--border-color);
-    padding-bottom: 8px;
-}
-.format-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-    gap: 10px;
-    margin-bottom: 20px;
-}
-.download-btn {
-    display: block;
-    background-color: #333;
-    color: var(--text-color);
-    text-decoration: none;
-    padding: 12px;
-    border-radius: 8px;
-    text-align: center;
-    transition: background-color 0.2s ease, transform 0.2s ease;
-    font-size: 0.9em;
-}
-.download-btn:hover { background-color: var(--primary-color); transform: translateY(-2px); }
-.download-btn .quality { display: block; font-weight: 700; font-size: 1.1em; }
-.download-btn .type { display: block; font-size: 0.8em; color: var(--subtle-text); }
-#error {
-    background-color: rgba(255, 60, 60, 0.1);
-    border: 1px solid var(--primary-color);
-    color: #ffcdd2;
-    padding: 15px;
-    border-radius: 8px;
-    text-align: center;
-    margin-top: 20px;
-}
-footer { text-align: center; margin-top: 30px; color: var(--subtle-text); font-size: 0.9em; }
+        const videoId = extractVideoId(videoURL);
+        if (!videoId) {
+            showError("Invalid YouTube URL. Please check the link and try again.");
+            return;
+        }
 
+        clearUI();
+        loader.classList.remove('hidden');
 
-@media (max-width: 768px) {
-    .container { padding: 20px; }
-    #url-form { flex-direction: column; }
-    #results-container {
-        grid-template-columns: 1fr; 
+        try {
+            
+            const data = await fetchWithFallback(videoId);
+            displayResults(data);
+        } catch (err) {
+            console.error(err);
+            showError("Could not fetch video details. All services may be down or the video is private. Please try again later.");
+        } finally {
+            loader.classList.add('hidden');
+        }
+    });
+
+    async function fetchWithFallback(videoId) {
+        for (const instance of API_INSTANCES) {
+            try {
+                const response = await fetch(`${instance}/api/v1/videos/${videoId}`);
+                if (!response.ok) {
+                    throw new Error(`Instance ${instance} failed with status ${response.status}`);
+                }
+                console.log(`Successfully fetched from: ${instance}`);
+                return await response.json(); 
+            } catch (error) {
+                console.warn(`Failed to fetch from ${instance}. Trying next...`, error);
+            }
+        }
+       
+        throw new Error("All API instances failed to respond.");
     }
-}
+
+    function displayResults(data) {
+        
+        resultsDiv.innerHTML = `
+            <div id="results-container">
+                <div id="video-info">
+                    <img src="${data.videoThumbnails.find(t => t.quality === 'medium').url}" alt="Video Thumbnail">
+                    <h2>${data.title}</h2>
+                </div>
+                <div id="download-options">
+                    <!-- Download buttons will be added here -->
+                </div>
+            </div>
+        `;
+
+        const downloadOptions = document.getElementById('download-options');
+
+        // Audio Section
+        const audioStreams = data.adaptiveFormats.filter(f => f.type.startsWith('audio/'));
+        if (audioStreams.length > 0) {
+            const bestAudio = audioStreams.sort((a, b) => b.bitrate - a.bitrate)[0];
+            const audioSection = createDownloadSection('Music (Audio Only)', [bestAudio], (format) => 'Best Quality', (format) => 'M4A');
+            downloadOptions.appendChild(audioSection);
+        }
+
+        // Video Section
+        const videoStreams = data.adaptiveFormats
+            .filter(f => f.type.startsWith('video/') && f.resolution)
+            .sort((a, b) => parseInt(b.resolution) - parseInt(a.resolution));
+        if (videoStreams.length > 0) {
+            const videoSection = createDownloadSection('Video', videoStreams, (format) => format.resolution, (format) => format.container.toUpperCase());
+            downloadOptions.appendChild(videoSection);
+        }
+    }
+
+    function createDownloadSection(title, formats, getQualityLabel, getTypeLabel) {
+        const sectionDiv = document.createElement('div');
+        sectionDiv.className = 'download-section';
+        
+        const heading = document.createElement('h3');
+        heading.textContent = title;
+        sectionDiv.appendChild(heading);
+
+        const grid = document.createElement('div');
+        grid.className = 'format-grid';
+        
+        formats.forEach(format => {
+            const button = document.createElement('a');
+            button.href = format.url;
+            button.className = 'download-btn';
+            button.target = '_blank';
+            button.download = '';
+            
+            button.innerHTML = `
+                <span class="quality">${getQualityLabel(format)}</span>
+                <span class="type">${getTypeLabel(format)}</span>
+            `;
+            grid.appendChild(button);
+        });
+
+        sectionDiv.appendChild(grid);
+        return sectionDiv;
+    }
+
+    function extractVideoId(url) {
+        const regex = /(?:v=|\/|embed\/|youtu.be\/)([a-zA-Z0-9_-]{11})/;
+        const match = url.match(regex);
+        return match ? match[1] : null;
+    }
+
+    function showError(message) {
+        errorDiv.textContent = message;
+        errorDiv.classList.remove('hidden');
+    }
+
+    function clearUI() {
+        resultsDiv.innerHTML = '';
+        errorDiv.classList.add('hidden');
+    }
+});
