@@ -3,16 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simple YT Downloader</title>
-    <meta name="description" content="Paste a YouTube link to download video or music directly. Fast, free, and mobile-friendly.">
+    <title>Robust YT Downloader</title>
+    <meta name="description" content="A reliable YouTube downloader that uses multiple services to ensure it's always working. Download video or music.">
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
 
     <div class="container">
         <header>
-            <h1>Direct YouTube Downloader</h1>
+            <h1>Robust YouTube Downloader</h1>
             <p>Paste a link to get your download buttons.</p>
         </header>
 
@@ -22,18 +24,16 @@
                 <button type="submit">Get Download Buttons</button>
             </form>
 
-            <!-- A spinner will show here while loading -->
             <div id="loader" class="hidden"></div>
+            
 
-            <!-- The download buttons will appear here -->
             <div id="results"></div>
 
-            <!-- Any error messages will appear here -->
             <div id="error" class="hidden"></div>
         </main>
 
         <footer>
-            <p>For educational purposes only.</p>
+            <p>Powered by the Invidious network. For educational purposes only.</p>
         </footer>
     </div>
 
